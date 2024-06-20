@@ -11,6 +11,9 @@ npm install -g truffle
 # Install Ganache globally
 npm install -g ganache-cli
 
+# Run Ganache (in a separate terminal)
+ganache-cli
+
 # Compile the contracts
 truffle compile
 
