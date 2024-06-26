@@ -20,4 +20,6 @@ truffle compile
 # Migrate the contracts
 truffle migrate
 
+# To perform an example election
+truffle exec scripts/interact.js
 ```
