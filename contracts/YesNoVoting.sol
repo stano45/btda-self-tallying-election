@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.22 <0.9.0;
 
-contract ScoreVoting {
+contract YesNoVoting {
     struct Candidate {
         uint id;
         string name;
-        uint score;
+        uint yesVotes;
+        uint noVotes;
     }
 
     struct Voter {
         bool hasVoted;
-        mapping(uint => uint) scores; // candidateId => score
+        bool vote;
     }
 
     address public admin;
@@ -19,7 +20,7 @@ contract ScoreVoting {
     uint public candidateCount;
     bool public votingOpen;
 
-    event VoteSubmitted(address voter, uint candidateId, uint score);
+    event VoteSubmitted(address voter, uint candidateId, bool vote);
     event VotingEnded();
 
     modifier onlyAdmin() {
@@ -35,20 +36,15 @@ contract ScoreVoting {
     constructor() {
         admin = msg.sender;
         votingOpen = true;
-        candidateCount = 0; // Ensure candidateCount is initialized to 0
+        candidateCount = 0;
     }
 
     function addCandidate(string memory _name) public onlyAdmin {
         candidateCount++;
-        candidates[candidateCount] = Candidate(candidateCount, _name, 0);
+        candidates[candidateCount] = Candidate(candidateCount, _name, 0, 0);
     }
 
-    function registerVoter(address _voter) public onlyAdmin {
-        require(!voters[_voter].hasVoted, "Voter already registered");
-        // Initialize Voter struct (no need to set hasVoted again here)
-    }
-
-    function vote(uint _candidateId, uint _score) public votingIsOpen {
+    function vote(uint _candidateId, bool _vote) public votingIsOpen {
         require(!voters[msg.sender].hasVoted, "Already voted");
         require(
             _candidateId > 0 && _candidateId <= candidateCount,
@@ -56,10 +52,15 @@ contract ScoreVoting {
         );
 
         voters[msg.sender].hasVoted = true;
-        voters[msg.sender].scores[_candidateId] = _score;
-        candidates[_candidateId].score += _score;
+        voters[msg.sender].vote = _vote;
 
-        emit VoteSubmitted(msg.sender, _candidateId, _score);
+        if (_vote) {
+            candidates[_candidateId].yesVotes++;
+        } else {
+            candidates[_candidateId].noVotes++;
+        }
+
+        emit VoteSubmitted(msg.sender, _candidateId, _vote);
     }
 
     function endVoting() public onlyAdmin {
@@ -67,11 +68,16 @@ contract ScoreVoting {
         emit VotingEnded();
     }
 
-    function getCandidateScore(uint _candidateId) public view returns (uint) {
+    function getCandidateVotes(
+        uint _candidateId
+    ) public view returns (uint yesVotes, uint noVotes) {
         require(
             _candidateId > 0 && _candidateId <= candidateCount,
             "Invalid candidate"
         );
-        return candidates[_candidateId].score;
+        return (
+            candidates[_candidateId].yesVotes,
+            candidates[_candidateId].noVotes
+        );
     }
 }
