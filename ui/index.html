@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Yes/No Voting</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.3.0/dist/web3.min.js"></script>
+</head>
+<body>
+<h1>Yes/No Voting</h1>
+<hr>
+<h3>Add Candidate</h3>
+<input id="newCandidate" type="text" placeholder="Enter candidate name">
+<button onclick="addCandidatee()">Add Candidate</button>
+<hr>
+<h3>Candidates</h3>
+<div id="candidates"></div>
+<hr>
+<button onclick="endVoting()">End Voting</button>
+
+<script>
+    var contractABI = [
+        {
+            "inputs": [],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": false,
+                    "internalType": "address",
+                    "name": "voter",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "candidateId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "bool",
+                    "name": "vote",
+                    "type": "bool"
+                }
+            ],
+            "name": "VoteSubmitted",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [],
+            "name": "VotingEnded",
+            "type": "event"
+        },
+        {
+            "inputs": [],
+            "name": "admin",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [],
+            "name": "candidateCount",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "name": "candidates",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "id",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "string",
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "yesVotes",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "noVotes",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "name": "voters",
+            "outputs": [
+                {
+                    "internalType": "bool",
+                    "name": "hasVoted",
+                    "type": "bool"
+                },
+                {
+                    "internalType": "bool",
+                    "name": "vote",
+                    "type": "bool"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [],
+            "name": "votingOpen",
+            "outputs": [
+                {
+                    "internalType": "bool",
+                    "name": "",
+                    "type": "bool"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "string",
+                    "name": "_name",
+                    "type": "string"
+                }
+            ],
+            "name": "addCandidate",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "_candidateId",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "bool",
+                    "name": "_vote",
+                    "type": "bool"
+                }
+            ],
+            "name": "vote",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "endVoting",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "_candidateId",
+                    "type": "uint256"
+                }
+            ],
+            "name": "getCandidateVotes",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "yesVotes",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "noVotes",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        },
+        {
+            "inputs": [],
+            "name": "getAllCandidates",
+            "outputs": [
+                {
+                    "components": [
+                        {
+                            "internalType": "uint256",
+                            "name": "id",
+                            "type": "uint256"
+                        },
+                        {
+                            "internalType": "string",
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "uint256",
+                            "name": "yesVotes",
+                            "type": "uint256"
+                        },
+                        {
+                            "internalType": "uint256",
+                            "name": "noVotes",
+                            "type": "uint256"
+                        }
+                    ],
+                    "internalType": "struct YesNoVoting.Candidate[]",
+                    "name": "",
+                    "type": "tuple[]"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function",
+            "constant": true
+        }
+    ]
+
+    var web3 = new Web3('http://localhost:8545');
+    var contractAddress = '0xbEC18365372bE5830FD819AFfe0E3AA66B503EDD'; // Fill with your contract address
+
+    var accounts;
+
+    async function getAccounts() {
+        accounts = await web3.eth.getAccounts();
+    }
+
+    var contract;
+    window.addEventListener('load', async function() {
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+        await getAccounts();
+        // Load candidates
+        var candidateCount = await contract.methods.candidateCount().call();
+        for (var i = 1; i <= candidateCount; i++) {
+            var candidate = await contract.methods.candidates(i).call();
+            var div = document.createElement('div');
+            var voteYesBtn = `<button onclick="vote(${candidate.id}, true)">Vote Yes</button>`;
+            var voteNoBtn = `<button onclick="vote(${candidate.id}, false)">Vote No</button>`;
+            div.innerHTML = `<h4>${candidate.name}</h4>Yes: ${candidate.yesVotes} No: ${candidate.noVotes}<br>${voteYesBtn}${voteNoBtn}<hr>`;
+            document.getElementById("candidates").appendChild(div);
+        }
+        const count = (await contract.methods.candidateCount().call());
+        console.log('Candidate count is:', count);
+    })
+
+    function addCandidatee() {
+        var candidateName = document.getElementById("newCandidate").value;
+        contract.methods.addCandidate(candidateName).send({ from: accounts[0], gas: 500000 });
+    }
+
+    function vote(candidateId, vote) {
+        contract.methods.vote(candidateId, vote).send({ from: accounts[0], gas: 500000 });
+    }
+
+    function endVoting() {
+        contract.methods.endVoting().send({ from: accounts[0] });
+    }
+
+</script>
+</body>
+</html>
