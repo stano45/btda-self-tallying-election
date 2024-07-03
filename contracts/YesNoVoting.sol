@@ -21,6 +21,7 @@ contract YesNoVoting {
     bool public votingOpen;
 
     event VoteSubmitted(address voter, uint candidateId, bool vote);
+    event VotingStarted();
     event VotingEnded();
 
     modifier onlyAdmin() {
@@ -33,15 +34,29 @@ contract YesNoVoting {
         _;
     }
 
+    modifier votingIsNotOpen() {
+        require(!votingOpen, "Voting is open");
+        _;
+    }
+
     constructor() {
         admin = msg.sender;
-        votingOpen = true;
         candidateCount = 0;
     }
 
-    function addCandidate(string memory _name) public onlyAdmin {
+    function addCandidate(
+        string memory _name
+    ) public onlyAdmin votingIsNotOpen {
         candidateCount++;
         candidates[candidateCount] = Candidate(candidateCount, _name, 0, 0);
+    }
+
+    function getCandidates() public view returns (Candidate[] memory) {
+        Candidate[] memory _candidates = new Candidate[](candidateCount);
+        for (uint i = 1; i <= candidateCount; i++) {
+            _candidates[i - 1] = candidates[i];
+        }
+        return _candidates;
     }
 
     function vote(uint _candidateId, bool _vote) public votingIsOpen {
@@ -63,7 +78,12 @@ contract YesNoVoting {
         emit VoteSubmitted(msg.sender, _candidateId, _vote);
     }
 
-    function endVoting() public onlyAdmin {
+    function startVoting() public onlyAdmin votingIsNotOpen {
+        votingOpen = true;
+        emit VotingStarted();
+    }
+
+    function endVoting() public onlyAdmin votingIsOpen {
         votingOpen = false;
         emit VotingEnded();
     }
