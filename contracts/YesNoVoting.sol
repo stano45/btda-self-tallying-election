@@ -18,7 +18,8 @@ contract YesNoVoting {
     mapping(address => Voter) public voters;
     mapping(uint => Candidate) public candidates;
     uint public candidateCount;
-    bool public votingOpen;
+    // 0 - voting not started, 1 - voting started, 2 - voting ended
+    uint public votingState;
 
     event VoteSubmitted(address voter, uint candidateId, bool vote);
     event VotingStarted();
@@ -30,18 +31,19 @@ contract YesNoVoting {
     }
 
     modifier votingIsOpen() {
-        require(votingOpen, "Voting is not open");
+        require(votingState == 1, "Voting is not open");
         _;
     }
 
     modifier votingIsNotOpen() {
-        require(!votingOpen, "Voting is open");
+        require(votingState != 1, "Voting is open");
         _;
     }
 
     constructor() {
         admin = msg.sender;
         candidateCount = 0;
+        votingState = 0;
     }
 
     function addCandidate(
@@ -79,13 +81,17 @@ contract YesNoVoting {
     }
 
     function startVoting() public onlyAdmin votingIsNotOpen {
-        votingOpen = true;
+        votingState = 1;
         emit VotingStarted();
     }
 
     function endVoting() public onlyAdmin votingIsOpen {
-        votingOpen = false;
+        votingState = 2;
         emit VotingEnded();
+    }
+
+    function getVotingStatus() public view returns (uint) {
+        return votingState;
     }
 
     function getCandidateVotes(
@@ -99,5 +105,21 @@ contract YesNoVoting {
             candidates[_candidateId].yesVotes,
             candidates[_candidateId].noVotes
         );
+    }
+
+    function getWinner() public view returns (Candidate memory) {
+        require(votingState == 2, "Voting is not ended");
+
+        Candidate memory winner = candidates[1];
+        for (uint i = 2; i <= candidateCount; i++) {
+            if (
+                candidates[i].yesVotes - candidates[i].noVotes >
+                winner.yesVotes - winner.noVotes
+            ) {
+                winner = candidates[i];
+            }
+        }
+
+        return winner;
     }
 }
