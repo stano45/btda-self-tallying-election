@@ -18,9 +18,11 @@ contract YesNoVoting {
     mapping(address => Voter) public voters;
     mapping(uint => Candidate) public candidates;
     uint public candidateCount;
-    bool public votingOpen;
+    // 0 - voting not started, 1 - voting started, 2 - voting ended
+    uint public votingState;
 
     event VoteSubmitted(address voter, uint candidateId, bool vote);
+    event VotingStarted();
     event VotingEnded();
 
     modifier onlyAdmin() {
@@ -29,19 +31,34 @@ contract YesNoVoting {
     }
 
     modifier votingIsOpen() {
-        require(votingOpen, "Voting is not open");
+        require(votingState == 1, "Voting is not open");
+        _;
+    }
+
+    modifier votingIsNotOpen() {
+        require(votingState != 1, "Voting is open");
         _;
     }
 
     constructor() {
         admin = msg.sender;
-        votingOpen = true;
         candidateCount = 0;
+        votingState = 0;
     }
 
-    function addCandidate(string memory _name) public onlyAdmin {
+    function addCandidate(
+        string memory _name
+    ) public onlyAdmin votingIsNotOpen {
         candidateCount++;
         candidates[candidateCount] = Candidate(candidateCount, _name, 0, 0);
+    }
+
+    function getCandidates() public view returns (Candidate[] memory) {
+        Candidate[] memory _candidates = new Candidate[](candidateCount);
+        for (uint i = 1; i <= candidateCount; i++) {
+            _candidates[i - 1] = candidates[i];
+        }
+        return _candidates;
     }
 
     function vote(uint _candidateId, bool _vote) public votingIsOpen {
@@ -63,9 +80,18 @@ contract YesNoVoting {
         emit VoteSubmitted(msg.sender, _candidateId, _vote);
     }
 
-    function endVoting() public onlyAdmin {
-        votingOpen = false;
+    function startVoting() public onlyAdmin votingIsNotOpen {
+        votingState = 1;
+        emit VotingStarted();
+    }
+
+    function endVoting() public onlyAdmin votingIsOpen {
+        votingState = 2;
         emit VotingEnded();
+    }
+
+    function getVotingStatus() public view returns (uint) {
+        return votingState;
     }
 
     function getCandidateVotes(
@@ -79,5 +105,21 @@ contract YesNoVoting {
             candidates[_candidateId].yesVotes,
             candidates[_candidateId].noVotes
         );
+    }
+
+    function getWinner() public view returns (Candidate memory) {
+        require(votingState == 2, "Voting is not ended");
+
+        Candidate memory winner = candidates[1];
+        for (uint i = 2; i <= candidateCount; i++) {
+            if (
+                candidates[i].yesVotes - candidates[i].noVotes >
+                winner.yesVotes - winner.noVotes
+            ) {
+                winner = candidates[i];
+            }
+        }
+
+        return winner;
     }
 }
