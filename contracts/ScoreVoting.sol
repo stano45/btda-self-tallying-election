@@ -7,6 +7,11 @@ contract ScoreVoting {
         string name;
     }
 
+//    struct PublicKeys {
+//        uint pubKey;
+//        uint[] pubKeysForCandidates;
+//    }
+
     struct CommitmentProof {
         uint[] p1;
         uint p2;
@@ -28,12 +33,15 @@ contract ScoreVoting {
     }
 
     address public admin;
-    mapping (address => uint[2]) public publicKeys; // key + signature
+    mapping (address => uint) public publicKeys; // key
+    mapping (address => uint[]) public publicKeysForCandidates; // key
     mapping (uint => Candidate) public candidates;
     mapping (uint => uint) public eachCandidateKeys; //???
-    mapping (address => Commitment) public commitments;
+    mapping (address => uint[]) public commitmentsXi;
+    mapping (address => uint[]) public commitmentsNu;
     mapping (address => CommitmentProof) public commitmentsProofs; // dual zkp, mb don't save
-    mapping (address => Ballot) public ballots;
+    mapping (address => uint[]) public ballotsBeta;
+    mapping (address => uint[]) public ballotsGamma;
     mapping (address => BallotProof) public ballotsProofs;
     address[] public voters;
 
@@ -41,11 +49,16 @@ contract ScoreVoting {
     uint public candidateCount; // need??
 
     event VoteSubmitted(address voter, uint candidateId, bool vote);
+    event VotersRegistrationStarted();
     event VotingStarted();
     event VotingEnded();
 
 
-    // 0 - voting not started, 1 - voting started, 2 - voting ended
+    // 0 - candidates registration
+    // 1 - voters registration
+    // 2 - commit phase
+    // 3 - vote phase
+    // 4 - vote ended
     uint public votingState;
 
     constructor() {
@@ -58,58 +71,81 @@ contract ScoreVoting {
     }
 
 
-    modifier votingIsOpen() {
-        require(votingState == 1, "Voting is not open");
+    modifier candidateRegistrationPhase() {
+        require(votingState == 0, "Candidate registration phase ended");
         _;
     }
 
-    modifier votingIsNotOpen() {
-        require(votingState != 1, "Voting is open");
+    modifier votersRegistrationPhase() {
+        require(votingState == 1, "Voters registration phase ended");
+        _;
+    }
+
+    modifier commitPhase() {
+        require(votingState == 2, "Commit phase ended");
+        _;
+    }
+
+    modifier votePhase() {
+        require(votingState == 3, "Vote phase ended");
+        _;
+    }
+
+    modifier voteEnded() {
+        require(votingState == 4, "Vote ended");
         _;
     }
 
     function addCandidate(
         string memory _name
-    ) public onlyAdmin votingIsNotOpen {
+    ) public onlyAdmin candidateRegistrationPhase {
         candidateCount++;
-        candidates[candidateCount] = Candidate(candidateCount, _name, 0, 0);
+        candidates[candidateCount] = Candidate(candidateCount, _name);//, 0, 0);
     }
 
-    function startVoting() public onlyAdmin votingIsNotOpen {
+    function startVotersRegistration() public onlyAdmin candidateRegistrationPhase {
         votingState = 1;
+        emit VotersRegistrationStarted();
+    }
+
+    function startVoting() public onlyAdmin votersRegistrationPhase {
+        votingState = 3;
         emit VotingStarted();
     }
 
-    function endVoting() public onlyAdmin votingIsOpen {
-        votingState = 2;
+    function endVoting() public onlyAdmin votePhase {
+        votingState = 4;
         emit VotingEnded();
     }
 
-    function registerVoter(uint[2] memory _pubKey) public payable { // payable??
+    function registerVoter(uint _pubKey, uint[] memory _pubKeyForCandidates) public payable { // payable??
         voters.push(msg.sender);
         publicKeys[msg.sender] = _pubKey;
+        publicKeysForCandidates[msg.sender] = _pubKeyForCandidates;
     }
 
-    function commitVote(Commitment commitment, CommitmentProof proof) public {
-        require(commitment.xi.length == candidateCount);
-        require(commitment.nu.length == candidateCount);
+    function commitVote(uint[] memory commitmentXi, uint[] memory commitmentNu, CommitmentProof memory proof) public {
+        require(commitmentXi.length == candidateCount);
+        require(commitmentNu.length == candidateCount);
         require(proof.p1.length == candidateCount);
-        commitments[msg.sender] = commitment;
+        commitmentsXi[msg.sender] = commitmentXi;
+        commitmentsNu[msg.sender] = commitmentNu;
         commitmentsProofs[msg.sender] = proof;
     }
 
-    function vote(Ballot ballot, BallotProof proof) public {
-        require(ballot.beta.length == candidateCount);
-        require(ballot.gamma.length == candidateCount);
+    function vote(uint[] memory ballotBeta, uint[] memory ballotGamma, BallotProof memory proof) public {
+        require(ballotBeta.length == candidateCount);
+        require(ballotGamma.length == candidateCount);
         require(proof.p3.length == candidateCount);
-        ballots[msg.sender] = ballot;
+        ballotsBeta[msg.sender] = ballotBeta;
+        ballotsGamma[msg.sender] = ballotGamma;
         ballotsProofs[msg.sender] = proof;
 
     }
 
     function selfTallying() public onlyAdmin {
         require(msg.sender == admin);
-        uint [candidateCount] result; // here we get results
-        return result;
+//        uint [candidateCount] result; // here we get results
+//        return result;
     }
 }
