@@ -12,6 +12,8 @@ const candidatesNumber = 5;
 const votersNumber = 10;
 const myNumber = 1; // retrieve somehow
 const P = 10;
+const maxScore = 5;
+const minScore = 0;
 
 function keyGen() {
     var key = group.genKeyPair()
@@ -47,7 +49,7 @@ function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
     let as = []
     let bs = []
     let data = [s, xi.getX(), xi.getY(), nu.getX(), nu.getY()]
-    for (let i = 0; i <= P; i++) {
+    for (let i = minScore; i <= maxScore; i++) {
         let e_k = getRand()
         let d_k = getRand()
         let a_k
@@ -68,13 +70,14 @@ function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
         data.push(b_k.getX())
         data.push(b_k.getY())
     }
-    let input = abi.rawEncode(['uint[49]'],[data])
+    let inputSize = (maxScore - minScore + 1) * 4 + 5
+    let input = abi.rawEncode([`uint[${inputSize}]`],[data])
     let c = new BN(keccak256(input))
     c = c.mod(group.n)
     let dsum = new BN(0)
-    for (let i = 0; i <= P; i++) {
+    for (let i = minScore; i <= maxScore; i++) {
         if (i !== point) {
-            dsum = dsum.add(ds[i]).mod(group.n)
+            dsum = dsum.add(ds[i - minScore]).mod(group.n)
         }
     }
     let d_j = c.sub(dsum).mod(group.n)
@@ -90,12 +93,12 @@ function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
         X_new_new = X_new_new.add(group.n)
     }
     let pi = [xi, nu, c]
-    for (let i = 0; i <= P; i++) {
-        pi.push(as[i])
-        pi.push(bs[i])
+    for (let i = minScore; i <= maxScore; i++) {
+        pi.push(as[i - minScore])
+        pi.push(bs[i - minScore])
         if (i !== point) {
-            pi.push(ds[i])
-            pi.push(es[i])
+            pi.push(ds[i - minScore])
+            pi.push(es[i - minScore])
         } else {
             pi.push(d_j)
             pi.push(e_j)
@@ -205,7 +208,7 @@ function commit(privateKey, points, votersPublicKeys) {
             let e = pi[k + 2]
             let we = W_i.mul(e)
             let nugd = C[i].nu.add(group.g.mul(points[i]).neg()).mul(d)
-            check2 = check2 && b.eq(we.add(nugd))
+            check3 = check3 && b.eq(we.add(nugd))
         }
         console.log("ZPK1 test 3 candidate " + i + ": " + check3)
 
@@ -236,9 +239,223 @@ function commit(privateKey, points, votersPublicKeys) {
     let b3 = b3_0.add(b3_1)
     console.log("ZKP2 test 3: " + a3.eq(b3));
 
-
-    return { C, pis }
+    return { C, pis, ss }
 }
+
+function ZKPoK3(privateKey, votersPublicKeys, point, xi, nu, beta, gamma, Z_i, s, x, y, r) {
+    let W_i = getW(votersPublicKeys, myNumber)
+    let as = []
+    let bs = []
+    let ds = []
+    let es = []
+    let a_primes = []
+    let b_primes = []
+    let d_primes = []
+    let e_primes = []
+    let f_primes = []
+    let rho = getRand()
+    for (let k = minScore; k <= maxScore; k++) {
+        let a
+        let b
+        let a_prime
+        let b_prime
+        let e, d, e_prime, d_prime, f_prime
+        if (k === point) {
+            e = d = e_prime = d_prime = f_prime = new BN(0)
+            a = group.g.mul(rho)
+            b = W_i.mul(rho)
+            a_prime = group.g.mul(rho)
+            b_prime = W_i.add(group.g).mul(rho)
+        } else {
+            e = getRand()
+            e_prime = getRand()
+            d = getRand()
+            d_prime = getRand()
+            f_prime = getRand()
+            a = group.g.mul(e).add(xi.mul(d))
+            b = W_i.mul(e).add(nu.add(group.g.mul(point).neg()).mul(d))
+            a_prime = group.g.mul(e_prime).add(votersPublicKeys[myNumber].mul(d_prime))
+            b_prime = W_i.mul(e_prime).add(group.g.mul(f_prime)).add(gamma.add(group.g.mul(point).neg()).mul(d_prime))
+        }
+        as.push(a)
+        bs.push(b)
+        ds.push(d)
+        es.push(e)
+        a_primes.push(a_prime)
+        b_primes.push(b_prime)
+        d_primes.push(d_prime)
+        e_primes.push(e_prime)
+        f_primes.push(f_prime)
+    }
+
+    let X_new = getRand()
+    let x_new = getRand()
+    let r_new = getRand()
+    let y_new = group.g.mul(x_new)
+    let beta_new = Z_i.mul(x_new).add(group.g.mul(r_new))
+    let data = [
+        privateKey, s, xi.getX(), xi.getY(), nu.getX(), nu.getY(),
+        gamma.getX(), gamma.getY(), y.getX(), y.getY(), y_new.getX(), y_new.getY(),
+        beta.getX(), beta.getY(), beta_new.getX(), beta_new.getY()]
+    let dataSize = 16
+    for (let k = minScore; k <= maxScore; k++) {
+        data.push(as[k - minScore].getX())
+        data.push(as[k - minScore].getY())
+        data.push(bs[k - minScore].getX())
+        data.push(bs[k - minScore].getY())
+        data.push(a_primes[k - minScore].getX())
+        data.push(a_primes[k - minScore].getY())
+        data.push(b_primes[k - minScore].getX())
+        data.push(b_primes[k - minScore].getY())
+        dataSize += 8
+    }
+    let input = abi.rawEncode([`uint[${dataSize}]`],[data])
+    let c = new BN(keccak256(input)).mod(group.n)
+    let X_new_new = toPos(X_new.sub(c.mul(privateKey)).mod(group.n))
+    let x_new_new = toPos(x_new.sub(c.mul(x)).mod(group.n))
+    let r_new_new = toPos(r_new.sub(c.mul(r)).mod(group.n))
+    let d_s = new BN(0)
+    let d_s_prime = new BN(0)
+    for (let k = minScore; k <= maxScore; k++) {
+        if (k === point) {
+            continue
+        }
+        d_s = d_s.add(ds[k]).mod(group.n)
+        d_s_prime = d_s_prime.add(d_primes[k]).mod(group.n)
+    }
+    let d_j = toPos(c.sub(d_s))
+    let e_j = toPos(rho.sub(s.mul(d_j)).mod(group.n))
+    let d_j_prime = toPos(c.sub(d_s_prime).mod(group.n))
+    let e_j_prime = toPos(rho.sub(privateKey.mul(d_j_prime)).mod(group.n))
+    let f_j_prime = toPos(rho.sub(r.mul(d_j_prime)).mod(group.n))
+
+    let pi3 = [
+        xi, nu, gamma, c, y, y_new, beta, beta_new, X_new_new,
+        x_new_new, r_new_new
+    ]
+    for (let i = minScore; i <= maxScore; i++) {
+        if (i !== point) {
+            pi3.push(as[i - minScore])
+            pi3.push(bs[i - minScore])
+            pi3.push(ds[i - minScore])
+            pi3.push(es[i - minScore])
+            pi3.push(a_primes[i - minScore])
+            pi3.push(b_primes[i - minScore])
+            pi3.push(d_primes[i - minScore])
+            pi3.push(e_primes[i - minScore])
+            pi3.push(f_primes[i - minScore])
+        } else {
+            pi3.push(as[i - minScore])
+            pi3.push(bs[i - minScore])
+            pi3.push(d_j)
+            pi3.push(e_j)
+            pi3.push(a_primes[i - minScore])
+            pi3.push(b_primes[i - minScore])
+            pi3.push(d_j_prime)
+            pi3.push(e_j_prime)
+            pi3.push(f_j_prime)
+        }
+    }
+
+    return pi3
+
+}
+
+function vote(privateKey, points, votersPublicKeys, xs, votersYs, C, ss) {
+    let Z = []
+    let rs = []
+    let W_i = getW(votersPublicKeys, myNumber)
+    let B = []
+    for (let j = 0; j < candidatesNumber; j++) {
+        let yj = []
+        for (let k = 0; k < votersYs.length; k++) {
+            yj.push(votersYs[k][j])
+        }
+        let Z_i = getW(yj, myNumber)
+        let r = getRand()
+        let beta = Z_i.mul(xs[j]).add(group.g.mul(r))
+        let gamma = group.g.mul(points[j]).add(W_i.mul(privateKey)).add(group.g.mul(r))
+        B.push({ beta, gamma })
+        rs.push(r)
+        Z.push(Z_i)
+    }
+    for (let j = 0; j < candidatesNumber; j++) {
+        let pi3 = ZKPoK3(
+            privateKey, votersPublicKeys, points[j], C[j].xi, C[j].nu, B[j].beta, B[j].gamma,
+            Z[j], ss[j], xs[j], votersYs[myNumber][j], rs[j]
+        )
+        let c = pi3[3]
+        //check 1
+
+        //check 2
+        let d_sum = new BN(0)
+        let d_prime_sum = new BN(0)
+        for (let k = 13; k < pi3.length; k+=9) {
+            d_sum = d_sum.add(pi3[k]).mod(group.n)
+            d_prime_sum = d_prime_sum.add(pi3[k + 4]).mod(group.n)
+        }
+        console.log("ZPK3 test 2 candidate " + j + ": " + c.eq(d_sum))
+        //check 3
+        console.log("ZPK3 test 3 candidate " + j + ": " + c.eq(d_prime_sum))
+
+        //check 4
+        let check4 = true
+        let xi = pi3[0]
+        for (let k = 11; k < pi3.length; k+=9) {
+            let a = pi3[k]
+            let d = pi3[k + 2]
+            let e = pi3[k + 3]
+            let t = a.eq(group.g.mul(e).add(xi.mul(d)))
+            check4 = check4 && t
+        }
+        console.log("ZPK3 test 4 candidate " + j + ": " + check4)
+
+        //check 5
+        let check5 = true
+        let W = getW(votersPublicKeys, myNumber)
+        let nu = pi3[1]
+        for (let k = 12; k < pi3.length; k+=9) {
+            let b = pi3[k]
+            let d = pi3[k + 1]
+            let e = pi3[k + 2]
+            let t = b.eq(W.mul(e).add(nu.add(group.g.mul(points[j]).neg()).mul(d)))
+            check5 = check5 && t
+        }
+        console.log("ZPK3 test 5 candidate " + j + ": " + check5)
+
+        //check 6
+        let check6 = true
+        for (let k = 15; k < pi3.length; k+=9) {
+            let a_prime = pi3[k]
+            let d_prime = pi3[k + 2]
+            let e_prime = pi3[k + 3]
+            let t = a_prime.eq(group.g.mul(e_prime).add(votersPublicKeys[myNumber].mul(d_prime)))
+            check6 = check6 && t
+        }
+        console.log("ZPK3 test 6 candidate " + j + ": " + check6)
+
+        //check 7
+        let check7 = true
+        let gamma = pi3[2]
+        for (let k = 16; k < pi3.length; k+=9) {
+            let b_prime = pi3[k]
+            let d_prime = pi3[k + 1]
+            let e_prime = pi3[k + 2]
+            let f_prime = pi3[k + 3]
+            let t = b_prime.eq(W_i.mul(e_prime).add(group.g.mul(f_prime)).add(gamma.add(group.g.mul(points[j]).neg()).mul(d_prime)))
+            check7 = check7 && t
+        }
+        console.log("ZPK3 test 7 candidate " + j + ": " + check7)
+    }
+}
+
+function toPos(n) {
+    if (n.isNeg()) {
+        n = n.add(group.n)
+    }
+    return n
+}
+
 
 function main(){
     let { publicKey, privateKey } = keyGen();
@@ -252,19 +469,30 @@ function main(){
         ys.push(y)
     }
     let randKeys = []
+    let randVoteKeys = []
     for (let i = 0; i < votersNumber; i++) {
         if (i !== myNumber) {
             randKeys.push(group.genKeyPair().getPublic())
         } else {
             randKeys.push(publicKey)
         }
+        let inner = []
+        if (i === myNumber) {
+            randVoteKeys.push(ys)
+        } else {
+            for (let j = 1; j <= candidatesNumber; j++) {
+                let { _, y } = keyDerive(privateKey, j)
+                // console.log(y)
+                inner.push(y)
+            }
+            randVoteKeys.push(inner)
+        }
     }
+    let points = [2, 2, 2, 4, 1]
 
-    commit(privateKey, [1, 2, 2, 1, 4], randKeys)
+    let { C, pis, ss } = commit(privateKey, points, randKeys)
+    vote(privateKey, points, randKeys, xs, randVoteKeys, C, ss)
     //now we can publish publicKey and ys on blockchain -- call register
-
-
-
 }
 
 main()
