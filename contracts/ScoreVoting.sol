@@ -33,7 +33,7 @@ contract ScoreVoting {
     }
 
     address public admin;
-    mapping (address => uint) public publicKeys; // key
+    mapping (address => uint[2]) public publicKeys; // key
     mapping (address => uint[]) public publicKeysForCandidates; // key
     mapping (uint => Candidate) public candidates;
     mapping (uint => uint) public eachCandidateKeys; //???
@@ -118,7 +118,8 @@ contract ScoreVoting {
         emit VotingEnded();
     }
 
-    function registerVoter(uint _pubKey, uint[] memory _pubKeyForCandidates) public payable { // payable??
+    function registerVoter(uint[2] memory _pubKey, uint[] memory _pubKeyForCandidates) public payable { // payable??
+        require(_pubKeyForCandidates.length == 2 * candidateCount); // 2 because each pub key is point
         voters.push(msg.sender);
         publicKeys[msg.sender] = _pubKey;
         publicKeysForCandidates[msg.sender] = _pubKeyForCandidates;
