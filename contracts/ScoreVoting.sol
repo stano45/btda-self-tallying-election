@@ -80,6 +80,7 @@ contract ScoreVoting {
     uint public votingState;
 
     constructor(address _cryptoAddress) {
+        admin = msg.sender;
         totalScore = 10;
         minScore = 0;
         maxScore = 5;
@@ -117,11 +118,23 @@ contract ScoreVoting {
         _;
     }
 
+    function getVotingStatus() public view returns (uint) {
+        return votingState;
+    }
+
     function addCandidate(
         string memory _name
     ) public onlyAdmin candidateRegistrationPhase {
         candidateCount++;
         candidates[candidateCount] = Candidate(candidateCount, _name);//, 0, 0);
+    }
+
+    function getCandidates() public view returns (Candidate[] memory) {
+        Candidate[] memory _candidates = new Candidate[](candidateCount);
+        for (uint i = 1; i <= candidateCount; i++) {
+            _candidates[i - 1] = candidates[i];
+        }
+        return _candidates;
     }
 
     function startVotersRegistration() public onlyAdmin candidateRegistrationPhase {
