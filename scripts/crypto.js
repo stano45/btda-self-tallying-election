@@ -6,11 +6,11 @@ const abi = require('ethereumjs-abi')
 const { keccak256 } = require('ethereumjs-util');
 const console = require("node:console");
 
-const group = new EC('secp256k1');
+const group = new EC('bn256');
 
 const candidatesNumber = 5;
-const votersNumber = 10;
-const myNumber = 1; // retrieve somehow
+const votersNumber = 9;
+const myNumber = 3; // retrieve somehow
 const P = 10;
 const maxScore = 5;
 const minScore = 0;
@@ -38,12 +38,12 @@ function keyDerive(privateKey, candidateId) {
     return { x, y } // x_i -- BigNumber, y_i -- point on elliptic curve
 }
 
-function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
+function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys, number) {
     let newKey = group.genKeyPair()
     let X_new = newKey.getPrivate()
     let Y_new = newKey.getPublic()
     let rho = getRand()
-    let W_i = getW(votersPublicKeys, myNumber)
+    let W_i = getW(votersPublicKeys, number)
     let es = []
     let ds = []
     let as = []
@@ -92,10 +92,12 @@ function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
     if (X_new_new.isNeg()) {
         X_new_new = X_new_new.add(group.n)
     }
-    let pi = [xi, nu, c, X_new_new, Y_new]
+    let pi = [c, X_new_new, Y_new.getX(), Y_new.getY()]
     for (let i = minScore; i <= maxScore; i++) {
-        pi.push(as[i - minScore])
-        pi.push(bs[i - minScore])
+        pi.push(as[i - minScore].getX())
+        pi.push(as[i - minScore].getY())
+        pi.push(bs[i - minScore].getX())
+        pi.push(bs[i - minScore].getY())
         if (i !== point) {
             pi.push(ds[i - minScore])
             pi.push(es[i - minScore])
@@ -107,9 +109,9 @@ function ZKPoK1(privateKey, s, xi, nu, point, j, votersPublicKeys) {
     return {pi}
 }
 
-function ZKPoK2(publicKeys, xis, nus, ss) {
+function ZKPoK2(publicKeys, xis, nus, ss, number) {
     let s_sum = new BN(0)
-    let W = getW(publicKeys, myNumber)
+    let W = getW(publicKeys, number)
     for (let i = 0; i < candidatesNumber; i++) {
         let s = getRand()
         s_sum = s_sum.add(s).mod(group.n)
@@ -153,19 +155,19 @@ function getW(publicKeys, i) {
     return W_top.add(W_bot.neg())
 }
 
-function commit(privateKey, points, votersPublicKeys) {
+function commit(privateKey, points, votersPublicKeys, number) {
     // let A = group.g.add(group.g.neg())
     // for (let i = 0; i < votersPublicKeys.length; i++) {
     //     if (i !== myNumber) {
     //         A = A.add(votersPublicKeys[i]);
     //     }
     // }
-    let A = getW(votersPublicKeys, myNumber)
+    let A = getW(votersPublicKeys, number)
     let ss = []
     let xis = []
     let nus = []
     let C = []
-    let W_i = getW(votersPublicKeys, myNumber)
+    let W_i = getW(votersPublicKeys, number)
     for (let i = 0; i < candidatesNumber; i++) {
         let s = getRand();
         let xi = group.g.mul(s)
@@ -174,53 +176,55 @@ function commit(privateKey, points, votersPublicKeys) {
         xis.push(xi)
         nus.push(nu)
         C.push({ xi, nu })
+        // console.log(C[i])
     }
     let pis = []
     for (let i = 0; i < candidatesNumber; i++) {
-        let { pi } = ZKPoK1(privateKey, ss[i], C[i].xi, C[i].nu, points[i], i, votersPublicKeys);
+        let { pi } = ZKPoK1(privateKey, ss[i], C[i].xi, C[i].nu, points[i], i, votersPublicKeys, number);
         pis.push(pi)
-        let c = pi[2]
-        let X_new_new = pi[3]
-        let Y_new = pi[4]
-
+        let c = pi[0]
+        let X_new_new = pi[1]
+        let Y_new = group.curve.point(pi[2], pi[3])
+        //
         //check 1
-        let p_d = pi[7]
-        for (let k = 11; k < pi.length; k+=4) {
-            p_d = p_d.add(pi[k]).mod(group.n)
-        }
-        console.log("ZPK1 test 1 candidate " + i + ": " + c.eq(p_d))
+        // let p_d = pi[7]
+        // for (let k = 11; k < pi.length; k+=4) {
+        //     p_d = p_d.add(pi[k]).mod(group.n)
+        // }
+        // console.log("ZPK1 test 1 candidate " + i + ": " + c.eq(p_d))
 
-        //check 3
-        let check2 = true
-        for (let k = 5; k < pi.length; k+=4) {
-            let a = pi[k]
+        // //check 3
+        // let check2 = true
+        // for (let k = 5; k < pi.length; k+=4) {
+        //     let a = pi[k]
+        //     let d = pi[k + 2]
+        //     let e = pi[k + 3]
+        //     let ge = group.g.mul(e)
+        //     let xid = C[i].xi.mul(d)
+        //     check2 = check2 && a.eq(ge.add(xid))
+        // }
+        // console.log("ZPK1 test 2 candidate " + i + ": " + check2)
+        //
+        // //check 3
+        let check3 = true
+        for (let k = 6; k < pi.length; k+=6) {
+            let b = group.curve.point(pi[k], pi[k + 1])
             let d = pi[k + 2]
             let e = pi[k + 3]
-            let ge = group.g.mul(e)
-            let xid = C[i].xi.mul(d)
-            check2 = check2 && a.eq(ge.add(xid))
-        }
-        console.log("ZPK1 test 2 candidate " + i + ": " + check2)
-
-        //check 3
-        let check3 = true
-        for (let k = 6; k < pi.length; k+=4) {
-            let b = pi[k]
-            let d = pi[k + 1]
-            let e = pi[k + 2]
             let we = W_i.mul(e)
-            let pointValue =  Math.floor((k - 3) / 4)
+            let pointValue =  Math.floor((k - 6) / 6)
             let nugd = C[i].nu.add(group.g.mul(pointValue).neg()).mul(d)
             check3 = check3 && b.eq(we.add(nugd))
         }
         console.log("ZPK1 test 3 candidate " + i + ": " + check3)
-
+        //
         //check 4
-        console.log("ZPK1 test 4 candidate " + i + ": " + Y_new.eq(votersPublicKeys[myNumber].mul(c).add(group.g.mul(X_new_new))))
+        // console.log("Check priv pub: " + votersPublicKeys[number].eq(group.g.mul(privateKey)))
+        console.log("ZPK1 test 4 candidate " + i + ": " + Y_new.eq(votersPublicKeys[number].mul(c).add(group.g.mul(X_new_new))))
 
     }
-    let { p_xi, p_xi_new, p_nu, p_nu_new, s_s_new, c } = ZKPoK2(votersPublicKeys, xis, nus, ss)
-
+    let { p_xi, p_xi_new, p_nu, p_nu_new, s_s_new, c } = ZKPoK2(votersPublicKeys, xis, nus, ss, number)
+    let pi2 = { p_xi, p_xi_new, p_nu, p_nu_new, s_s_new, c }
     //check 1
     let data = [
         p_xi.getX(), p_xi.getY(), p_xi_new.getX(), p_xi_new.getY(),
@@ -242,7 +246,7 @@ function commit(privateKey, points, votersPublicKeys) {
     let b3 = b3_0.add(b3_1)
     console.log("ZKP2 test 3: " + a3.eq(b3));
 
-    return { C, pis, ss }
+    return { C, pis, ss, pi2 }
 }
 
 function ZKPoK3(privateKey, votersPublicKeys, point, xi, nu, beta, gamma, Z_i, s, x, y, r) {
@@ -514,8 +518,7 @@ function toPos(n) {
 function main(){
     console.log(group.g.getX().toString())
     console.log(group.g.getY().toString())
-    console.log(group.n.toString())
-    console.log(group.n.toString())
+    // console.log(group.n.toString())
     let { publicKey, privateKey } = keyGen();
     let xs = []
     let ys = []
@@ -555,11 +558,13 @@ function main(){
             randVoteKeys.push(innery)
         }
     }
-    let points = [2, 2, 1, 4, 1]
+    let points = [2, 3, 1, 4, 1]
 
-    let { C, pis, ss } = commit(privateKey, points, randKeys)
+    let { C, pis, ss } = commit(privateKey, points, randKeys, myNumber)
     vote(privateKey, points, randKeys, xs, randVoteKeys, C, ss, randVotePrivateKeys)
     //now we can publish publicKey and ys on blockchain -- call register
 }
 
 main()
+
+module.exports = { keyGen, keyDerive, commit, vote, getW }

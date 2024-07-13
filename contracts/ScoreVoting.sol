@@ -81,6 +81,7 @@ contract ScoreVoting {
 
     constructor(address _cryptoAddress) {
         admin = msg.sender;
+        votingState = 0;
         totalScore = 10;
         minScore = 0;
         maxScore = 5;
@@ -160,29 +161,29 @@ contract ScoreVoting {
     }
 
     function commitVote(uint[] memory commitmentXi, uint[] memory commitmentNu, uint[][] memory proof1, uint[] memory proof2, uint[2] memory W_i) public {
-        require(commitmentXi.length == candidateCount);
-        require(commitmentNu.length == candidateCount);
-        require(proof1.length == candidateCount);
-        require(checkZKPoK1(proof1, W_i));
-        commitmentsXi[msg.sender] = commitmentXi;
-        commitmentsNu[msg.sender] = commitmentNu;
-        commitmentsProofs1[msg.sender] = proof1;
-        commitmentsProofs2[msg.sender] = proof2;
+        require(commitmentXi.length == candidateCount * 2, "Wrong xis");
+        require(commitmentNu.length == candidateCount * 2, "Wrong nus");
+        require(proof1.length == candidateCount, "Wrong proof1");
+        require(checkZKPoK1(commitmentXi, commitmentNu, proof1, W_i), "Wrong ZKPoK1");
+//        commitmentsXi[msg.sender] = commitmentXi;
+//        commitmentsNu[msg.sender] = commitmentNu;
+//        commitmentsProofs1[msg.sender] = proof1;
+//        commitmentsProofs2[msg.sender] = proof2;
     }
 
-    function checkZKPoK1(uint[][] memory proof, uint[2] memory W_i) public view returns (bool) {
+    function checkZKPoK1(uint[] memory xis, uint[] memory nus, uint[][] memory proof, uint[2] memory W_i) public view returns (bool) {
         ZKPoK1_Proof memory p;
         bool result = true;
         for (uint i = 0; i < candidateCount; i++) {
             uint d_sum = 0;
-            p.xi = [proof[i][0], proof[i][1]];
-            p.nu = [proof[i][2], proof[i][3]];
-            p.c = proof[i][4];
-            p.X = proof[i][5];
-            p.Y = [proof[i][6], proof[i][7]];
-            for (uint j = minScore; j <= maxScore; i++) {
-                d_sum = d_sum + proof[i][12 + (j - minScore) * 6];
-                result = result && ZKPoK1_Inners(proof[i], j, W_i);
+            p.xi = [xis[i * 2], xis[i * 2 + 1]];
+            p.nu = [nus[i * 2], nus[i * 2 + 1]];
+            p.c = proof[i][0];
+            p.X = proof[i][1];
+            p.Y = [proof[i][2], proof[i][3]];
+            for (uint j = minScore; j <= maxScore; j++) {
+                d_sum = crypto.Add(d_sum, proof[i][8 + (j - minScore) * 6]);
+                result = result && ZKPoK1_Inners(p.xi, p.nu, proof[i], j, W_i);
             }
             result = result && (p.c == d_sum); // c = sum d
             result = result && (crypto.Equal(
@@ -196,32 +197,28 @@ contract ScoreVoting {
         return result;
     }
 
-    function ZKPoK1_Inners(uint[] memory proof, uint j, uint[2] memory W_i) private view returns (bool) {
+    function ZKPoK1_Inners(uint[2] memory xi, uint[2] memory nu, uint[] memory proof, uint j, uint[2] memory W_i) private view returns (bool) {
         bool result = true;
         Point memory a;
-        a.data = [proof[8 + (j - minScore) * 6], proof[9 + (j - minScore) * 6]];
+        a.data = [proof[4 + (j - minScore) * 6], proof[5 + (j - minScore) * 6]];
         Point memory b;
-        b.data = [proof[10 + (j - minScore) * 6], proof[11 + (j - minScore) * 6]];
-        Point memory xi;
-        xi.data =[proof[0], proof[1]];
-        Point memory nu;
-        nu.data = [proof[2], proof[3]];
-        uint d = proof[12 + (j - minScore) * 6];
-        uint e = proof[13 + (j - minScore) * 6];
+        b.data = [proof[6 + (j - minScore) * 6], proof[7 + (j - minScore) * 6]];
+        uint d = proof[8 + (j - minScore) * 6];
+        uint e = proof[9 + (j - minScore) * 6];
         result = result && ZKPoK11(xi, a.data, d, e); // a == g^e xi^d
         result = result && ZKPoK12(nu, W_i, b.data, d, e, j); // check that b equals W_i^e * (nu/g^j)^d
         return result;
     }
 
-    function ZKPoK11(Point memory xi, uint[2] memory a, uint d, uint e) private view returns (bool) {
+    function ZKPoK11(uint[2] memory xi, uint[2] memory a, uint d, uint e) private view returns (bool) {
         return crypto.Equal(
-            crypto.ecAdd(crypto.ecMul(e), crypto.ecMul(d, xi.data)),
+            crypto.ecAdd(crypto.ecMul(e), crypto.ecMul(d, xi)),
             a
         );
     }
 
-    function ZKPoK12(Point memory nu, uint[2] memory W_i, uint[2] memory b, uint e, uint d, uint j) private view returns (bool) {
-        uint[2] memory div = crypto.ecAdd(nu.data, crypto.ecNeg(crypto.ecMul(j)));
+    function ZKPoK12(uint[2] memory nu, uint[2] memory W_i, uint[2] memory b, uint d, uint e, uint j) private view returns (bool) {
+        uint[2] memory div = crypto.ecAdd(nu, crypto.ecNeg(crypto.ecMul(j)));
         return crypto.Equal(
             crypto.ecAdd(
                 crypto.ecMul(e, W_i),
