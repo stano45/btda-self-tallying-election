@@ -172,6 +172,10 @@ contract ScoreVoting {
         publicKeysForCandidates[msg.sender] = _pubKeyForCandidates;
     }
 
+    function getVoters() public view returns (address[] memory) {
+        return voters;
+    }
+
     function commitVote(uint[] memory commitmentXi, uint[] memory commitmentNu, uint[][] memory proof1, uint[] memory proof2, uint[2] memory W_i) public {
         require(commitmentXi.length == candidateCount * 2, "Wrong xis");
         require(commitmentNu.length == candidateCount * 2, "Wrong nus");

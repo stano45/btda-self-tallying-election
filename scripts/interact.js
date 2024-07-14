@@ -41,6 +41,9 @@ module.exports = async function(callback) {
         const ks = await instance.getVoterPublicKeys()
         console.log(ks)
 
+        const voters = await instance.getVoters()
+        console.log(voters)
+
         for (let i = 1; i < accounts.length; i++) {
             // console.log(votingPublicKeys[i - 1].length)
             let { C, pis, ss, pi2} = await commit(keys[i - 1].privateKey, [2, 2, 1, 4, 1], pubKeys, i - 1)
