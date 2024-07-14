@@ -153,6 +153,18 @@ contract ScoreVoting {
         emit VotingEnded();
     }
 
+    function getVoterPublicKeys() public view returns (uint[2][] memory allPubKeys) {
+        uint voterCount = voters.length;
+        allPubKeys = new uint[2][](voterCount);
+
+        for (uint i = 0; i < voterCount; i++) {
+            address voter = voters[i];
+            allPubKeys[i] = publicKeys[voter];
+        }
+
+        return allPubKeys;
+    }
+
     function registerVoter(uint[2] memory _pubKey, uint[] memory _pubKeyForCandidates) public { // payable??
         require(_pubKeyForCandidates.length == 2 * candidateCount); // 2 because each pub key is point
         voters.push(msg.sender);
