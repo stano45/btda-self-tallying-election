@@ -42,6 +42,81 @@ contract ScoreVoting {
         uint[] other;
     }
 
+    struct ZKPoK1_Proof_API {
+        uint[] xis;
+        uint[] nus;
+        uint[][] proof;
+        uint[2] W_i;
+        uint candidateCount;
+        uint minScore;
+        uint maxScore;
+        uint[2] publicKey;
+    }
+
+    struct ZKPoK2_Proof {
+        uint[2] xi;
+        uint[2] xi_new;
+        uint[2] nu;
+        uint[2] nu_new;
+        uint s_s_new;
+        uint c;
+    }
+
+    struct ZKPoK3_Proof_API {
+        uint[] betas;
+        uint[] gammas;
+        uint[][] proof;
+        uint[2] W_i;
+        uint candidateCount;
+        uint minScore;
+        uint maxScore;
+        uint[] xis;
+        uint[] nus;
+        uint[] publicKeysForCandidates;
+        uint[2] publicKey;
+        uint[] Zs;
+    }
+
+//    struct ZKPoK3_2_Proof_API {
+//        uint[] betas;
+//        uint[] gammas;
+//        uint[][] proof;
+//        uint[2] W_i;
+//        uint candidateCount;
+//        uint minScore;
+//        uint maxScore;
+//        uint[] xis;
+//        uint[] nus;
+//        uint[2] publicKey;
+//        uint[] Zs;
+//    }
+
+    struct ZKPoK3_Proof {
+        uint[2] xi;
+        uint[2] nu;
+        uint[2] beta;
+        uint[2] gamma;
+        uint c;
+        uint[2] y;
+        uint[2] y_new;
+        uint[2] beta_new;
+        uint X_new;
+        uint x_new;
+        uint r_new;
+    }
+
+    struct ZKPoK3_Proof_Point {
+        uint[2] a;
+        uint[2] a_prime;
+        uint[2] b;
+        uint[2] b_prime;
+        uint d;
+        uint e;
+        uint d_prime;
+        uint e_prime;
+        uint f_prime;
+    }
+
     struct Point {
         uint[2] data;
     }
@@ -52,8 +127,8 @@ contract ScoreVoting {
     uint maxScore;
     mapping (address => uint[2]) public publicKeys; // key
     mapping (address => uint[]) public publicKeysForCandidates; // key
+    uint[][] public publicKeysForCandidates2;
     mapping (uint => Candidate) public candidates;
-    mapping (uint => uint) public eachCandidateKeys; //???
     mapping (address => uint[]) public commitmentsXi;
     mapping (address => uint[]) public commitmentsNu;
     mapping (address => uint[][]) public commitmentsProofs1; // dual zkp
@@ -170,6 +245,7 @@ contract ScoreVoting {
         voters.push(msg.sender);
         publicKeys[msg.sender] = _pubKey;
         publicKeysForCandidates[msg.sender] = _pubKeyForCandidates;
+        publicKeysForCandidates2.push(_pubKeyForCandidates);
     }
 
     function getVoters() public view returns (address[] memory) {
@@ -180,77 +256,79 @@ contract ScoreVoting {
         require(commitmentXi.length == candidateCount * 2, "Wrong xis");
         require(commitmentNu.length == candidateCount * 2, "Wrong nus");
         require(proof1.length == candidateCount, "Wrong proof1");
-        require(checkZKPoK1(commitmentXi, commitmentNu, proof1, W_i), "Wrong ZKPoK1");
-//        commitmentsXi[msg.sender] = commitmentXi;
-//        commitmentsNu[msg.sender] = commitmentNu;
-//        commitmentsProofs1[msg.sender] = proof1;
-//        commitmentsProofs2[msg.sender] = proof2;
+
+        ZKPoK1_Proof_API memory p1;
+        p1.xis = commitmentXi;
+        p1.nus = commitmentNu;
+        p1.proof = proof1;
+        p1.W_i = W_i;
+        p1.candidateCount = candidateCount;
+        p1.minScore = minScore;
+        p1.maxScore = maxScore;
+        p1.publicKey = publicKeys[msg.sender];
+        require(crypto.checkZKPoK1(p1), "Wrong ZKPoK1");
+
+        require(crypto.checkZKPoK2(proof2, W_i, totalScore), "Wrong ZKPoK2");
+        commitmentsXi[msg.sender] = commitmentXi;
+        commitmentsNu[msg.sender] = commitmentNu;
+        commitmentsProofs1[msg.sender] = proof1;
+        commitmentsProofs2[msg.sender] = proof2;
     }
 
-    function checkZKPoK1(uint[] memory xis, uint[] memory nus, uint[][] memory proof, uint[2] memory W_i) public view returns (bool) {
-        ZKPoK1_Proof memory p;
-        bool result = true;
+    function vote(uint[] memory betas, uint[] memory gammas, uint[][] memory proof3, uint[] memory proof4, uint[2] memory W_i) public {
+        require(betas.length == candidateCount * 2, "Wrong betas");
+        require(gammas.length == candidateCount * 2, "Wrong gammas");
+        require(proof3.length == candidateCount, "Wrong proof3");
+        require(proof3[0].length == 8 + (maxScore - minScore + 1) * 13, "Wrong proof3");
+
+        ZKPoK3_Proof_API memory p;
+        p.betas = betas;
+        p.gammas = gammas;
+        p.proof = proof3;
+        p.W_i = W_i;
+        p.candidateCount = candidateCount;
+        p.minScore = minScore;
+        p.maxScore = maxScore;
+        p.xis = commitmentsXi[msg.sender];
+        p.nus = commitmentsNu[msg.sender];
+        p.publicKeysForCandidates = publicKeysForCandidates[msg.sender];
+        p.publicKey = publicKeys[msg.sender];
+        p.Zs = new uint[](candidateCount * 2);
         for (uint i = 0; i < candidateCount; i++) {
-            uint d_sum = 0;
-            p.xi = [xis[i * 2], xis[i * 2 + 1]];
-            p.nu = [nus[i * 2], nus[i * 2 + 1]];
-            p.c = proof[i][0];
-            p.X = proof[i][1];
-            p.Y = [proof[i][2], proof[i][3]];
-            for (uint j = minScore; j <= maxScore; j++) {
-                d_sum = crypto.Add(d_sum, proof[i][8 + (j - minScore) * 6]);
-                result = result && ZKPoK1_Inners(p.xi, p.nu, proof[i], j, W_i);
+            uint[] memory Zs = new uint[](voters.length * 2);
+            uint num = 1000;
+            uint j = 0;
+            for (j = 0; j < voters.length; j++) {
+                Zs[j * 2] = publicKeysForCandidates[voters[j]][i * 2];
+                Zs[j * 2 + 1] = publicKeysForCandidates[voters[j]][i * 2 + 1];
+                if (msg.sender == voters[j]) {
+                    num = j;
+                }
             }
-            result = result && (p.c == d_sum); // c = sum d
-            result = result && (crypto.Equal(
-                p.Y,
-                crypto.ecAdd(
-                    crypto.ecMul(p.c, publicKeys[msg.sender]),
-                    crypto.ecMul(p.X)
-                )
-            )); // Y = pubKey^c * g^X
+            uint[2] memory z = getWi(Zs, num);
+            p.Zs[i * 2] = z[0];
+            p.Zs[i * 2 + 1] = z[1];
         }
-        return result;
+
+        require(crypto.checkZKPoK3_1(p), "Wrong ZKPoK3");
+        require(crypto.checkZKPoK3_2(p), "Wrong ZKPoK3");
+
+        ballotsBeta[msg.sender] = betas;
+        ballotsGamma[msg.sender] = gammas;
+//        ballotsProofs[msg.sender] = proof;
+
     }
 
-    function ZKPoK1_Inners(uint[2] memory xi, uint[2] memory nu, uint[] memory proof, uint j, uint[2] memory W_i) private view returns (bool) {
-        bool result = true;
-        Point memory a;
-        a.data = [proof[4 + (j - minScore) * 6], proof[5 + (j - minScore) * 6]];
-        Point memory b;
-        b.data = [proof[6 + (j - minScore) * 6], proof[7 + (j - minScore) * 6]];
-        uint d = proof[8 + (j - minScore) * 6];
-        uint e = proof[9 + (j - minScore) * 6];
-        result = result && ZKPoK11(xi, a.data, d, e); // a == g^e xi^d
-        result = result && ZKPoK12(nu, W_i, b.data, d, e, j); // check that b equals W_i^e * (nu/g^j)^d
-        return result;
-    }
-
-    function ZKPoK11(uint[2] memory xi, uint[2] memory a, uint d, uint e) private view returns (bool) {
-        return crypto.Equal(
-            crypto.ecAdd(crypto.ecMul(e), crypto.ecMul(d, xi)),
-            a
-        );
-    }
-
-    function ZKPoK12(uint[2] memory nu, uint[2] memory W_i, uint[2] memory b, uint d, uint e, uint j) private view returns (bool) {
-        uint[2] memory div = crypto.ecAdd(nu, crypto.ecNeg(crypto.ecMul(j)));
-        return crypto.Equal(
-            crypto.ecAdd(
-                crypto.ecMul(e, W_i),
-                crypto.ecMul(d, div)),
-            b
-        );
-    }
-
-    function vote(uint[] memory ballotBeta, uint[] memory ballotGamma, BallotProof memory proof) public {
-        require(ballotBeta.length == candidateCount);
-        require(ballotGamma.length == candidateCount);
-        require(proof.p3.length == candidateCount);
-        ballotsBeta[msg.sender] = ballotBeta;
-        ballotsGamma[msg.sender] = ballotGamma;
-        ballotsProofs[msg.sender] = proof;
-
+    function getWi(uint[] memory keys, uint i) public view returns (uint[2] memory) {
+        uint[2] memory W_top = crypto.ecMul(0);
+        uint[2] memory W_bot = crypto.ecMul(0);
+        for (uint j = 0; j < i * 2; j+=2) {
+            W_top = crypto.ecAdd(W_top, [keys[j], keys[j + 1]]);
+        }
+        for (uint j = i * 2 + 2; j < keys.length; j+=2) {
+            W_bot = crypto.ecAdd(W_bot, [keys[j], keys[j + 1]]);
+        }
+        return crypto.ecAdd(W_top, crypto.ecNeg(W_bot));
     }
 
     function selfTallying() public onlyAdmin {
