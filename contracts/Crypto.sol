@@ -13,16 +13,6 @@ contract Crypto {
         uint d_prime;
         uint e_prime;
         uint f_prime;
-    }
-
-    struct ZKPoK3_data2 {
-        uint[2] xi;
-        uint[2] nu;
-        uint[2] beta_new;
-        uint c;
-        uint[2] beta;
-        uint x_new;
-        uint r_new;
         uint[2] Z;
         uint i;
     }
@@ -139,38 +129,38 @@ contract Crypto {
     }
 
     function checkZKPoK2(uint[] memory proof, uint[2] memory W_i, uint totalScore) public view returns (bool) {
-        ScoreVoting.ZKPoK2_Proof memory p;
-        p.xi = [proof[0], proof[1]];
-        p.xi_new = [proof[2], proof[3]];
-        p.nu = [proof[4], proof[5]];
-        p.nu_new = [proof[6], proof[7]];
-        p.s_s_new = proof[8];
-        p.c = proof[9];
+        ScoreVoting.ZKPoK2_Proof memory pp;
+        pp.xi = [proof[0], proof[1]];
+        pp.xi_new = [proof[2], proof[3]];
+        pp.nu = [proof[4], proof[5]];
+        pp.nu_new = [proof[6], proof[7]];
+        pp.s_s_new = proof[8];
+        pp.c = proof[9];
         bool result = true;
         uint c = uint(keccak256(abi.encodePacked([
             proof[0], proof[1], proof[2], proof[3],
             proof[4], proof[5], proof[6], proof[7]
         ])));
-        result = result && c == p.c; // hashed values equal
+        result = result && c == pp.c; // hashed values equal
 
         result = result && Equal(
-            p.xi_new,
+            pp.xi_new,
             ecAdd(
-                ecMul(c, p.xi),
+                ecMul(c, pp.xi),
                 ecMul(proof[8])
             )
         ); // p_xi_new == (p_xi)^c * g^s_s_new
 
         result = result && Equal(
-            p.nu_new,
+            pp.nu_new,
             ecAdd(
                 ecMul(c,
                     ecAdd(
-                        p.nu,
+                        pp.nu,
                         ecNeg(ecMul(totalScore))
                     )
                 ),
-                ecMul(p.s_s_new, W_i)
+                ecMul(pp.s_s_new, W_i)
             )
         );
 
@@ -182,6 +172,9 @@ contract Crypto {
         ScoreVoting.ZKPoK3_Proof memory pp;
         bool result = true;
         uint[] memory toHash = new uint[](14 + 8 * (pr.maxScore - pr.minScore + 1));
+        uint d_sum = 0;
+        uint d_prime_sum = 0;
+
         for (uint i = 0; i < pr.candidateCount; i++) {
             pp.xi = [pr.xis[i * 2], pr.xis[i * 2 + 1]];
             pp.nu = [pr.nus[i * 2], pr.nus[i * 2 + 1]];
@@ -208,8 +201,8 @@ contract Crypto {
             toHash[11] = pp.beta[1];
             toHash[12] = pp.beta_new[0];
             toHash[13] = pp.beta_new[1];
-            uint d_sum = 0;
-            uint d_prime_sum = 0;
+            d_sum = 0;
+            d_prime_sum = 0;
             for (uint j = 8; j < pr.proof[i].length; j += 13) {
                 d_sum = Add(d_sum, pr.proof[i][j + 4]);
                 d_prime_sum = Add(d_prime_sum, pr.proof[i][j + 10]);
@@ -223,31 +216,6 @@ contract Crypto {
                 toHash[19 + k * 8] = pr.proof[i][j + 7];
                 toHash[20 + k * 8] = pr.proof[i][j + 8];
                 toHash[21 + k * 8] = pr.proof[i][j + 9];
-
-
-                ZKPoK3_data memory d;
-                d.a = [pr.proof[i][j], pr.proof[i][j + 1]];
-                d.b = [pr.proof[i][j + 2], pr.proof[i][j + 3]];
-                d.d = pr.proof[i][j + 4];
-                d.e = pr.proof[i][j + 5];
-                d.a_prime = [pr.proof[i][j + 6], pr.proof[i][j + 7]];
-                d.b_prime = [pr.proof[i][j + 8], pr.proof[i][j + 9]];
-                d.d_prime = pr.proof[i][j + 10];
-                d.e_prime = pr.proof[i][j + 11];
-                d.f_prime = pr.proof[i][j + 12];
-
-                ZKPoK3_data2 memory d2;
-                d2.xi = pp.xi;
-                d2.nu = pp.nu;
-                d2.beta = pp.beta;
-                d2.beta_new = pp.beta_new;
-                d2.c = pp.c;
-                d2.x_new = pp.x_new;
-                d2.r_new = pp.r_new;
-                d2.i = (j - 8) / 13 + pr.minScore;
-
-                result = result && ZKPoK3_Point_1(d2, d, pr.W_i, pr.publicKey);
-
             }
             uint c = Mod(uint(keccak256(abi.encodePacked(toHash))));
             result = result && c == pp.c;
@@ -261,6 +229,7 @@ contract Crypto {
     function checkZKPoK3_2(ScoreVoting.ZKPoK3_Proof_API memory pr) public view returns (bool) {
         ScoreVoting.ZKPoK3_Proof memory pp;
         bool result = true;
+        ZKPoK3_data memory d;
         for (uint i = 0; i < pr.candidateCount; i++) {
             uint j = 0;
             pp.xi = [pr.xis[i * 2], pr.xis[i * 2 + 1]];
@@ -273,45 +242,38 @@ contract Crypto {
             pp.X_new = pr.proof[i][5];
             pp.x_new = pr.proof[i][6];
             pp.r_new = pr.proof[i][7];
-            ZKPoK3_data memory d;
-            ZKPoK3_data2 memory d2;
 
-            for (j = 8; j < pr.proof[i].length; j += 13) {
-                ScoreVoting.ZKPoK3_Proof_Point memory pp2;
-                pp2.a = [pr.proof[i][j], pr.proof[i][j + 1]];
-                pp2.b = [pr.proof[i][j + 2], pr.proof[i][j + 3]];
-                pp2.d = pr.proof[i][j + 4];
-                pp2.e = pr.proof[i][j + 5];
-                pp2.a_prime = [pr.proof[i][j + 6], pr.proof[i][j + 7]];
-                pp2.b_prime = [pr.proof[i][j + 8], pr.proof[i][j + 9]];
-                pp2.d_prime = pr.proof[i][j + 10];
-                pp2.e_prime = pr.proof[i][j + 11];
-                pp2.f_prime = pr.proof[i][j + 12];
+            for (uint j = 8; j < pr.proof[i].length; j += 13) {
 
-                d.a = pp2.a;
-                d.b = pp2.b;
-                d.d = pp2.d;
-                d.e = pp2.e;
-                d.a_prime = pp2.a_prime;
-                d.b_prime = pp2.b_prime;
-                d.d_prime = pp2.d_prime;
-                d.e_prime = pp2.e_prime;
-                d.f_prime = pp2.f_prime;
+                d.a = [pr.proof[i][j], pr.proof[i][j + 1]];
+                d.b = [pr.proof[i][j + 2], pr.proof[i][j + 3]];
+                d.d = pr.proof[i][j + 4];
+                d.e = pr.proof[i][j + 5];
+                d.a_prime = [pr.proof[i][j + 6], pr.proof[i][j + 7]];
+                d.b_prime = [pr.proof[i][j + 8], pr.proof[i][j + 9]];
+                d.d_prime = pr.proof[i][j + 10];
+                d.e_prime = pr.proof[i][j + 11];
+                d.f_prime = pr.proof[i][j + 12];
 
-                d2.xi = pp.xi;
-                d2.nu = pp.nu;
-                d2.beta = pp.beta;
-                d2.beta_new = pp.beta_new;
-                d2.c = pp.c;
-                d2.x_new = pp.x_new;
-                d2.r_new = pp.r_new;
-                d2.Z = [pr.Zs[i * 2], pr.Zs[i * 2 + 1]];
+                d.i = (j - 8) / 13 + pr.minScore;
+                d.Z = [pr.Zs[i * 2], pr.Zs[i * 2 + 1]];
 
-                result = result && ZKPoK3_Point_2(d2, d, pr.W_i, (j - 8) / 13 + pr.minScore, pr.publicKey);
+                result = result && ZKPoK3_Point_1(pp.xi, pp.nu, d, pr.W_i, d.i);
 
-                result = result && ZKPoK3_Point_3(pp.gamma, d, pr.W_i, (j - 8) / 13 + pr.minScore);
+                result = result && ZKPoK3_Point_2(d.a_prime, d.d_prime, d.e_prime, pr.publicKey);
 
-                result = result && ZKPoK3_Point_5(d2);
+                result = result && ZKPoK3_Point_3(pp.gamma, d, pr.W_i, d.i);
+
+                result = result && Equal(
+                    pp.beta_new,
+                    ecAdd(
+                        ecMul(pp.c, pp.beta),
+                        ecAdd(
+                            ecMul(pp.x_new, d.Z),
+                            ecMul(pp.r_new)
+                        )
+                    )
+                );
             }
         }
 
@@ -320,13 +282,13 @@ contract Crypto {
     }
 
     function ZKPoK3_Point_1(
-        ZKPoK3_data2 memory pr, ZKPoK3_data memory pp, uint[2] memory W_i, uint[2] memory publicKey) public view returns (bool) {
+        uint[2] memory xi, uint[2] memory nu, ZKPoK3_data memory pp, uint[2] memory W_i, uint i) public view returns (bool) {
         bool result = true;
         result = result && Equal(
             pp.a,
             ecAdd(
                 ecMul(pp.e),
-                ecMul(pp.d, pr.xi)
+                ecMul(pp.d, xi)
             )
         ); // a = g^e * xi^d
         result = result && Equal(
@@ -335,31 +297,25 @@ contract Crypto {
                 ecMul(pp.e, W_i),
                 ecMul(
                     pp.d,
-                    ecAdd(pr.nu, ecNeg(ecMul(pr.i)))
+                    ecAdd(nu, ecNeg(ecMul(i)))
                 )
             )
         ); // b = W_i^e * (nu/g^i)^d
         return result;
     }
 
-    function ZKPoK3_Point_2(
-        ZKPoK3_data2 memory pr, ZKPoK3_data memory pp, uint[2] memory W_i, uint i,
-        uint[2] memory publicKey
-    ) public view returns (bool) {
-        bool result = true;
-        result = result && Equal(
-            pp.a_prime,
+    function ZKPoK3_Point_2(uint[2] memory a_prime, uint d_prime, uint e_prime, uint[2] memory publicKey) public view returns (bool) {
+        return Equal(
+            a_prime,
             ecAdd(
-                ecMul(pp.e_prime),
-                ecMul(pp.d_prime, publicKey)
+                ecMul(e_prime),
+                ecMul(d_prime, publicKey)
             )
         );
-        return result;
     }
 
     function ZKPoK3_Point_3(uint[2] memory gamma, ZKPoK3_data memory pp, uint[2] memory W_i, uint i) public view returns (bool) {
-        bool result = true;
-        result = result && Equal(
+        return Equal(
             pp.b_prime,
             ecAdd(
                 ecAdd(
@@ -372,27 +328,6 @@ contract Crypto {
                         gamma,
                         ecNeg(ecMul(i))
                     )
-                )
-            )
-        );
-        return result;
-    }
-
-    function ZKPo3_Point_2_1(ZKPoK3_data2 memory pr, ZKPoK3_data memory pp, uint i) private view returns (uint[2] memory) {
-        return ecMul(
-            pp.d,
-            ecAdd(pr.nu, ecNeg(ecMul(i)))
-        );
-    }
-
-    function ZKPoK3_Point_5(ZKPoK3_data2 memory pr) private view returns (bool) {
-        return Equal(
-            pr.beta_new,
-            ecAdd(
-                ecMul(pr.c, pr.beta),
-                ecAdd(
-                    ecMul(pr.x_new, pr.Z),
-                    ecMul(pr.r_new)
                 )
             )
         );
