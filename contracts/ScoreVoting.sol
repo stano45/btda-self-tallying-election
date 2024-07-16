@@ -319,7 +319,31 @@ contract ScoreVoting {
 
     }
 
-    function getWi(uint[] memory keys, uint i) public view returns (uint[2] memory) {
+    function getAllBetas() public view returns (uint[][] memory allBetas) {
+        uint voterCount = voters.length;
+        allBetas = new uint[][](voterCount);
+
+        for (uint i = 0; i < voterCount; i++) {
+            address voter = voters[i];
+            allBetas[i] = ballotsBeta[voter];
+        }
+
+        return allBetas;
+    }
+
+    function getAllGammas() public view returns (uint[][] memory allGammas) {
+        uint voterCount = voters.length;
+        allGammas = new uint[][](voterCount);
+
+        for (uint i = 0; i < voterCount; i++) {
+            address voter = voters[i];
+            allGammas[i] = ballotsGamma[voter];
+        }
+
+        return allGammas;
+    }
+
+    function getWi(uint[] memory keys, uint i) private view returns (uint[2] memory) {
         uint[2] memory W_top = crypto.ecMul(0);
         uint[2] memory W_bot = crypto.ecMul(0);
         for (uint j = 0; j < i * 2; j+=2) {

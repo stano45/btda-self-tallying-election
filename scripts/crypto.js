@@ -576,6 +576,29 @@ function main(){
     //now we can publish publicKey and ys on blockchain -- call register
 }
 
-main()
+function selfTally(betas, gammas) {
+    let res = []
+    let candidatesNumber = betas[0].length / 2;
+    let votersNumber = betas.length
+    for (let i = 0; i < candidatesNumber; i++) {
+        let b_prod = group.g.add(group.g.neg())
+        let g_prod = group.g.add(group.g.neg())
+        for (let j = 0; j < votersNumber; j++) {
+            let new_b = group.curve.point(betas[j][i * 2], betas[j][i * 2 + 1])
+            b_prod = b_prod.add(new_b)
+            let new_g = group.curve.point(gammas[j][i * 2], gammas[j][i * 2 + 1])
+            g_prod = g_prod.add(new_g)
+        }
+        let r = g_prod.add(b_prod.neg())
+        for (let k = 0; k < votersNumber * maxScore; k++) {
+            if (r.eq(group.g.mul(k))) {
+                res.push(k)
+            }
+        }
+    }
+    return res
+}
 
-module.exports = { keyGen, keyDerive, commit, vote, getW }
+// main()
+
+module.exports = { keyGen, keyDerive, commit, vote, getW, selfTally }

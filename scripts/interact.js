@@ -1,5 +1,5 @@
 const ScoreVoting = artifacts.require("ScoreVoting");
-const { keyGen, keyDerive, commit, getW, vote } = require("./crypto.js");
+const { keyGen, keyDerive, commit, getW, vote, selfTally } = require("./crypto.js");
 
 module.exports = async function(callback) {
     try {
@@ -85,6 +85,12 @@ module.exports = async function(callback) {
             await instance.vote(betas, gammas, pi3s, [], [W_i.getX(), W_i.getY()],
                 { from: accounts[i] });
         }
+
+        let allBetas = await instance.getAllBetas( {from: accounts[0] });
+        let allGammas = await instance.getAllGammas( {from: accounts[0] });
+
+        let res = selfTally(allBetas, allGammas)
+        console.log(res)
 
         callback();
     } catch (error) {
