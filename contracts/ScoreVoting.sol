@@ -313,6 +313,8 @@ contract ScoreVoting {
         require(crypto.checkZKPoK3_1(p), "Wrong ZKPoK3");
         require(crypto.checkZKPoK3_2(p), "Wrong ZKPoK3");
 
+        require(crypto.checkZKPoK4(proof4, gammas, publicKeys[msg.sender], candidateCount), "Wrong ZKPoK4");
+
         ballotsBeta[msg.sender] = betas;
         ballotsGamma[msg.sender] = gammas;
 //        ballotsProofs[msg.sender] = proof;

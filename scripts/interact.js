@@ -70,7 +70,7 @@ module.exports = async function(callback) {
         }
 
         for (let i = 1; i < accounts.length; i++) {
-            let { B, pi3s, } = vote(keys[i - 1].privateKey, [2, 1, 2, 4, 1], pubKeys,
+            let { B, pi3s, pi4} = vote(keys[i - 1].privateKey, [2, 1, 2, 4, 1], pubKeys,
                 votingPrivateKeys[i - 1], votingPublicKeys, Cs[i - 1], sss[i - 1], i - 1)
             let betas = []
             let gammas = []
@@ -82,7 +82,7 @@ module.exports = async function(callback) {
             }
 
             let W_i = getW(pubKeys, i - 1)
-            await instance.vote(betas, gammas, pi3s, [], [W_i.getX(), W_i.getY()],
+            await instance.vote(betas, gammas, pi3s, pi4, [W_i.getX(), W_i.getY()],
                 { from: accounts[i] });
         }
 

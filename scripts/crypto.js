@@ -401,7 +401,7 @@ function ZKPoK4(privateKey, publicKeys, p_gamma, number) {
     let input = abi.rawEncode(['uint[8]'], [data])
     let c = new BN(keccak256(input)).mod(group.n)
     let X_new_new = toPos(X_new.sub(c.mul(privateKey)).mod(group.n))
-    return { Y, Y_new, X_new_new, p_gamma, gamma_new, c }
+    return [Y_new.getX(), Y_new.getY(), X_new_new, gamma_new.getX(), gamma_new.getY(), c]
 
 }
 
@@ -505,7 +505,7 @@ function vote(privateKey, points, votersPublicKeys, xs, votersYs, C, ss, number)
         console.log("ZPK3 test 7 candidate " + j + ": " + check7)
     }
 
-    let { Y, Y_new, X_new_new, p_gamma, gamma_new, c} = ZKPoK4(privateKey, votersPublicKeys, p_gamma_, number)
+    let pi4 = ZKPoK4(privateKey, votersPublicKeys, p_gamma_, number)
     //check 2
     // console.log("ZPK4 test 1: " + Y_new.eq(Y.mul(c).add(group.g.mul(X_new_new))))
     //
@@ -515,7 +515,7 @@ function vote(privateKey, points, votersPublicKeys, xs, votersYs, C, ss, number)
     // let r2 = W_i.mul(X_new_new.mul(new BN(candidatesNumber)).mod(group.n))
     // console.log("ZPK4 test 2: " + gamma_new.eq(r1.add(r2)))
 
-    return { B, pi3s }
+    return { B, pi3s, pi4 }
 }
 
 function toPos(n) {

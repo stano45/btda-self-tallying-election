@@ -17,6 +17,13 @@ contract Crypto {
         uint i;
     }
 
+    struct ZKPoK4_proof {
+        uint[2] Y_new;
+        uint X_new_new;
+        uint[2] gamma_new;
+        uint c;
+    }
+
     uint256 constant public gx = 19823850254741169819033785099293761935467223354323761392354670518001715552183;
     uint256 constant public gy = 15097907474011103550430959168661954736283086276546887690628027914974507414020;
     uint256 constant public q =  21888242871839275222246405745257275088548364400416034343698204186575808495617; // curve order
@@ -331,5 +338,30 @@ contract Crypto {
                 )
             )
         );
+    }
+
+    function checkZKPoK4(uint[] memory proof, uint[] memory gammas, uint[2] memory publicKey, uint candidateCount) public view returns (bool) {
+        bool result = true;
+        uint[2] memory p_gamma = ecMul(0);
+        ZKPoK4_proof memory pp;
+        pp.Y_new = [proof[0], proof[1]];
+        pp.X_new_new = proof[2];
+        pp.gamma_new = [proof[3], proof[4]];
+        pp.c = proof[5];
+        for (uint i = 0; i < candidateCount; i++) {
+            p_gamma = ecAdd([gammas[i * 2], gammas[i * 2 + 1]], p_gamma);
+        }
+        uint c = Mod(uint(keccak256(abi.encodePacked(
+            [publicKey[0], publicKey[1], pp.Y_new[0], pp.Y_new[1], p_gamma[0], p_gamma[1], pp.gamma_new[0], pp.gamma_new[1]]
+        ))));
+        result = result && pp.c == c;
+        result = result && Equal(
+            pp.Y_new,
+            ecAdd(
+                ecMul(pp.c, publicKey),
+                ecMul(pp.X_new_new)
+            )
+        );
+        return result;
     }
 }
