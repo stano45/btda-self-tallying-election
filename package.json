@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "elliptic": "^6.5.5",
+    "ethereumjs-abi": "^0.6.8",
+    "secure-random": "^1.1.2"
+  }
+}
